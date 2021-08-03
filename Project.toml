@@ -1,0 +1,7 @@
+name = "BetheNetworks"
+uuid = "1ba884bd-fd05-43e9-8b2c-0402afe20497"
+authors = ["Felix Kunzmann <fe.kunzmann@gmail.com>"]
+version = "0.1.0"
+
+[deps]
+BlockTensors = "501571fb-40ef-4c91-8962-06e2936314b9"
