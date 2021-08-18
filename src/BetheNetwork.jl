@@ -4,6 +4,7 @@ export bethe_network, bethe_MPS
 
 using BlockTensors
 using BlockTensors.TensorChain
+using BlockTensors.MatrixProductStates
 using ..Pauli
 using ..LaxOperators
 
@@ -32,22 +33,16 @@ function bethe_network(N, spectral_parameters, physical, auxiliary)
     return network
 end
 
-function bethe_MPS(network, auxiliary)
-    mps = network[begin, :]
+function bethe_MPS(network, auxiliary, params...)
+    MPS = network[begin, :]
     for k in axes(network, 1)[begin + 1 : end]
-        mps .*= @view network[k, :]
+        MPS = MPO_MPS_contraction(view(network, k, :), MPS, auxiliary)
+        canonicalize!(MPS, eachindex(MPS), Outgoing(auxiliary))
+        if !isempty(params)
+            canonicalize!(MPS, reverse(eachindex(MPS)), Incoming(auxiliary), params...)
+        end
     end
-    auxiliaries_out = only.(matching.(Ref(Outgoing(auxiliary)), network[:, begin]))
-    auxiliaries_in = dual.(auxiliaries_out)
-    mps[begin] = mergelegs(mps[begin], auxiliaries_out)
-    for n in eachindex(mps)[begin + 1 : end - 1]
-        mps[n] = mergelegs(mps[n], auxiliaries_out, auxiliaries_in)
-    end
-    mps[end] = mergelegs(mps[end], auxiliaries_in)
-    for t in mps
-        BlockTensors.prune!(t)
-    end
-    return mps
+    return MPS
 end
 
 end
