@@ -47,111 +47,120 @@ end
 
 function optimize_betheMPS!(MPS, network, physical, auxiliary, maxblockdim)
     @assert size(network, 2) == length(MPS)
+    scaling = ones(float(real(eltype(eltype(MPS)))), size(network, 2))
     contractions = similar(network, size(network, 1) + 1, size(network, 2))
-    K = axes(network, 2)
-    Kbegin = K[begin : end - 2]
-    Kmiddle = K[begin + 1 : end - 1]
-    Kend = K[begin + 2 : end]
-    MPS[Kbegin[begin]], MPS[Kmiddle[begin]] = exchangegauge(
-        MPS[Kbegin[begin]], MPS[Kmiddle[begin]], Outgoing(auxiliary)
+    N = axes(network, 2)
+    Nbegin = N[begin : end - 2]
+    Nmiddle = N[begin + 1 : end - 1]
+    Nend = N[begin + 2 : end]
+    MPS[Nbegin[begin]], MPS[Nmiddle[begin]] = exchangegauge(
+        MPS[Nbegin[begin]], MPS[Nmiddle[begin]], Outgoing(auxiliary)
     )
     contractions[axes(network, 1), [begin, end]] .= network[:, [begin, end]]
     contractions[end, begin] = MPS[begin]'
-    for ks in zip(Kbegin, Kmiddle, Kend)
+    for ns in zip(Nbegin, Nmiddle, Nend)
         updatelocally!(
-            MPS, contractions, network, 
-            physical, Outgoing(auxiliary), maxblockdim, ks...
-        ) do MPS, contractions, auxiliary, kprev, k, knext
-            MPS[k], MPS[knext] = exchangegauge(MPS[k], MPS[knext], auxiliary)
+            MPS, contractions, scaling, network, 
+            physical, Outgoing(auxiliary), maxblockdim, ns...
+        ) do MPS, contractions, auxiliary, nprev, n, nnext
+            MPS[n], MPS[nnext] = exchangegauge(MPS[n], MPS[nnext], auxiliary)
             nothing
         end
     end
-    norm² = updatelocally!(
-        MPS, contractions, Incoming(auxiliary), Kmiddle[end], Kend[end]
+    norm = updatelocally!(
+        MPS, contractions, Incoming(auxiliary), Nmiddle[end], Nend[end]
     )
-    @show norm²; norm²s = [norm²]
-    sizehint!(norm²s, 2 * length(MPS))
-    while length(norm²s) < length(MPS) || !isapprox(norm²s[end], norm²s[end - length(MPS)])
-        for ks in zip(reverse(Kend), reverse(Kmiddle), reverse(Kbegin)) 
-            norm² = updatelocally!(
-                optimize!, MPS, contractions, network, 
-                physical, Incoming(auxiliary), maxblockdim, ks...
+    norm *= scaling[Nmiddle[end]]
+    @show norm; norms = [norm]
+    sizehint!(norms, 2 * length(MPS))
+    while length(norms) < length(MPS) || !isapprox(norms[end], norms[end - length(MPS)])
+        for (nprev, n, nnext) in zip(reverse(Nend), reverse(Nmiddle), reverse(Nbegin)) 
+            norm = updatelocally!(
+                optimize!, MPS, contractions, scaling, network, 
+                physical, Incoming(auxiliary), maxblockdim, nprev, n, nnext
             )
-            @show norm²; push!(norm²s, norm²)
+            norm *= scaling[nprev] * scaling[nnext]
+            @show norm; push!(norms, norm)
         end
-        norm² = updatelocally!(
-            MPS, contractions, Outgoing(auxiliary), Kmiddle[begin], Kbegin[begin]
+        norm = updatelocally!(
+            MPS, contractions, Outgoing(auxiliary), Nmiddle[begin], Nbegin[begin]
         )
-        @show norm²; push!(norm²s, norm²)
-        for ks in zip(Kbegin, Kmiddle, Kend)
-            norm² = updatelocally!(
-                optimize!, MPS, contractions, network, 
-                physical, Outgoing(auxiliary), maxblockdim, ks...
+        norm *= scaling[Nmiddle[begin]]
+        @show norm; push!(norms, norm)
+        for (nprev, n, nnext) in zip(Nbegin, Nmiddle, Nend)
+            norm = updatelocally!(
+                optimize!, MPS, contractions, scaling, network, 
+                physical, Outgoing(auxiliary), maxblockdim, nprev, n, nnext
             )
-            @show norm²; push!(norm²s, norm²)
+            norm *= scaling[nprev] * scaling[nnext]
+            @show norm; push!(norms, norm)
         end
-        norm² = updatelocally!(
-            MPS, contractions, Incoming(auxiliary), Kmiddle[end], Kend[end]
+        norm = updatelocally!(
+            MPS, contractions, Incoming(auxiliary), Nmiddle[end], Nend[end]
         )
-        @show norm²; push!(norm²s, norm²)
+        norm *= scaling[Nmiddle[end]]
+        @show norm; push!(norms, norm)
     end
-    return norm²s
+    return norms
 end
 
-function optimize!(MPS, contractions, auxiliary, kprev, k, knext)
+function optimize!(MPS, contractions, auxiliary, nprev, n, nnext)
     contraction = 1
-    for l in axes(contractions, 1)[begin : end - 1]
-        contraction = (contractions[l, k] * contraction) * contractions[l, knext]
+    for k in axes(contractions, 1)[begin : end - 1]
+        contraction = (contractions[k, n] * contraction) * contractions[k, nnext]
     end
-    MPS[k], R = qr(
-        (contractions[end, kprev] * contraction) * contractions[end, knext], 
+    MPS[n], R = qr(
+        (contractions[end, nprev] * contraction) * contractions[end, nnext], 
         auxiliary
     )
-    MPS[knext] = R * MPS[knext]
-    return real(R'R)
+    norm = √real(R'R)
+    MPS[nnext] = R / norm * MPS[nnext]
+    return norm
 end
 
 function updatelocally!(
-    update!, MPS, contractions, network, 
-    physical, auxiliary, maxblockdim, kprev, k, knext
+    update!, MPS, contractions, scaling, network, 
+    physical, auxiliary, maxblockdim, nprev, n, nnext
 )
-    Lnet = axes(network, 1)
-    contractions[Lnet, k] .= view(contractions, Lnet, kprev) .* view(network, :, k)
-    result = update!(MPS, contractions, auxiliary, kprev, k, knext)
-    contractions[end, k] = contractions[end, kprev] * MPS[k]'
-    L = axes(contractions, 1)
-    for l in L 
-        contractions[l, k] = mergelegs(
-            contractions[l, k],
+    Knet = axes(network, 1)
+    contractions[Knet, n] .= view(contractions, Knet, nprev) .* view(network, :, n)
+    result = update!(MPS, contractions, auxiliary, nprev, n, nnext)
+    contractions[end, n] = contractions[end, nprev] * MPS[n]'
+    K = axes(contractions, 1)
+    for k in K 
+        contractions[k, n] = mergelegs(
+            contractions[k, n],
             union(
-                matching(Outgoing(physical), contractions[l, kprev]),
-                matching(Outgoing(physical), contractions[l, k])
+                matching(Outgoing(physical), contractions[k, nprev]),
+                matching(Outgoing(physical), contractions[k, n])
             ),
             union(
-                matching(Incoming(physical), contractions[l, kprev]),
-                matching(Incoming(physical), contractions[l, k])
+                matching(Incoming(physical), contractions[k, nprev]),
+                matching(Incoming(physical), contractions[k, n])
             )
         )
     end
-    canonicalize!(view(contractions, :, k), L, Outgoing(physical), normalize = false)
-    canonicalize!(
-        view(contractions, :, k), reverse(L), Incoming(physical), maxblockdim,
-        normalize = false
+    canonicalize!(view(contractions, :, n), K, Outgoing(physical), normalize = false)
+    norm = canonicalize!(
+        view(contractions, :, n), reverse(K), Incoming(physical), maxblockdim,
+        normalize = true
     )
+    scaling[n] = scaling[nprev] * norm
     return result
 end
 
 function updatelocally!(
-    MPS, contractions, auxiliary, kprev, k
+    MPS, contractions, auxiliary, nprev, n
 )
     contraction = 1
-    for l in axes(contractions, 1)[begin : end - 1]
-        contraction = contractions[l, kprev] * (contraction * contractions[l, k])
+    for k in axes(contractions, 1)[begin : end - 1]
+        contraction = contractions[k, nprev] * (contraction * contractions[k, n])
     end
-    MPS[k], R = qr(contractions[end, kprev] * contraction, auxiliary)
-    MPS[kprev] = MPS[kprev] * R
-    contractions[end, k] = MPS[k]'
-    return real(R'R)
+    MPS[n], R = qr(contractions[end, nprev] * contraction, auxiliary)
+    norm = √real(R'R)
+    MPS[nprev] = MPS[nprev] * R / norm
+    contractions[end, n] = MPS[n]'
+    return norm
 end
 
 
