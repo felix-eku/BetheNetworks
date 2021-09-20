@@ -101,7 +101,7 @@ function optimize_betheMPS!(MPS, network, physical, auxiliary, maxblockdim)
         norm *= scaling[Nmiddle[end]]
         @show norm; push!(norms, norm)
     end
-    return norms
+    return norms, contractions
 end
 
 function optimize!(MPS, contractions, auxiliary, nprev, n, nnext)
