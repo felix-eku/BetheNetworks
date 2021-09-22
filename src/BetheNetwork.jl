@@ -73,7 +73,7 @@ function optimize_betheMPS!(MPS, network, physical, auxiliary, maxblockdim)
     norm *= scaling[Nmiddle[end]]
     @show norm; norms = [norm]
     sizehint!(norms, 2 * length(MPS))
-    while length(norms) < length(MPS) || !isapprox(norms[end], norms[end - length(MPS)])
+    while length(norms) < length(MPS) || !isapprox(norms[end], norms[end - length(MPS) + 1])
         for (nprev, n, nnext) in zip(reverse(Nend), reverse(Nmiddle), reverse(Nbegin)) 
             norm = updatelocally!(
                 optimize!, MPS, contractions, scaling, network, 
@@ -100,6 +100,7 @@ function optimize_betheMPS!(MPS, network, physical, auxiliary, maxblockdim)
         )
         norm *= scaling[Nmiddle[end]]
         @show norm; push!(norms, norm)
+        if length(norms) > 9 * length(MPS) break end
     end
     return norms, contractions
 end
