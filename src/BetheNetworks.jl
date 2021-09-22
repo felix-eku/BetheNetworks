@@ -26,10 +26,15 @@ function main(N, maxdim_initial, maxdim)
     p = Space("p")
     a = Space("a")
     spectrals = solve_groundstate_BAE(N)
-    network = bethe_network(N, spectrals, p, a)
+    spectrals_optimalorder = similar(spectrals)
+    M = length(spectrals)
+    m = div(M, 2, RoundUp)
+    spectrals_optimalorder[1:2:M] = spectrals[m:-1:1]
+    spectrals_optimalorder[2:2:M] = spectrals[m+1:M]
+    network = bethe_network(N, spectrals_optimalorder, p, a)
     MPS = bethe_MPS(network, a, maxdim_initial)
 
-    energy = bethe_energy(N, spectrals)
+    energy = bethe_energy(N, spectrals_optimalorder)
     hamiltonMPO = heisenberg_hamiltonian_MPO(N, p, Space("state"))
     original_deviation = abs(real(expectationvalue(hamiltonMPO, MPS) - energy) / energy)
     
