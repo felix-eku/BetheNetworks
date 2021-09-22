@@ -26,16 +26,15 @@ function main(N, maxdim_initial, maxdim)
     spectrals = solve_groundstate_BAE(N)
     network = bethe_network(N, spectrals, p, a)
     MPS = bethe_MPS(network, a, maxdim_initial)
-    norms, contractions = optimize_betheMPS!(MPS, network, p, a, maxdim)
-    
+
     energy = bethe_energy(N, spectrals)
     hamiltonMPO = heisenberg_hamiltonian_MPO(N, p, Space("state"))
+    original_deviation = abs(real(expectationvalue(hamiltonMPO, MPS) - energy) / energy)
+    
+    norms, contractions = optimize_betheMPS!(MPS, network, p, a, maxdim) 
     deviation = abs(real(expectationvalue(hamiltonMPO, MPS) - energy) / energy)
-    entanglement = [
-        entanglement_entropy(view(contractions, :, n), size(network, 1), Outgoing(p))
-        for n in axes(contractions, 2)
-    ]
-    return deviation, entanglement, MPS, norms, contractions
+    
+    return original_deviation, deviation, MPS, contractions, norms
 end
 
 end
