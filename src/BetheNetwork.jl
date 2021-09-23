@@ -141,10 +141,11 @@ function updatelocally!(
             )
         )
     end
-    canonicalize!(view(contractions, :, n), K, Outgoing(physical), normalize = false)
+    canonicalize!(
+        view(contractions, :, n), reverse(K), Incoming(physical), normalize = false
+    )
     norm = canonicalize!(
-        view(contractions, :, n), reverse(K), Incoming(physical), maxblockdim,
-        normalize = true
+        view(contractions, :, n), K, Outgoing(physical), maxblockdim, normalize = true
     )
     scaling[n] = scaling[nprev] * norm
     return result
