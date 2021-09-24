@@ -33,19 +33,19 @@ function bethe_network(N, spectral_parameters, physical, auxiliary)
     return network
 end
 
-function bethe_MPS(network, auxiliary, params...)
+function bethe_MPS(network, auxiliary; params...)
     MPS = network[begin, :]
     for k in axes(network, 1)[begin + 1 : end]
         MPS = MPO_MPS_contraction(view(network, k, :), MPS, auxiliary)
         canonicalize!(MPS, eachindex(MPS), Outgoing(auxiliary))
         if !isempty(params)
-            canonicalize!(MPS, reverse(eachindex(MPS)), Incoming(auxiliary), params...)
+            canonicalize!(MPS, reverse(eachindex(MPS)), Incoming(auxiliary); params...)
         end
     end
     return MPS
 end
 
-function optimize_betheMPS!(MPS, network, physical, auxiliary, maxblockdim)
+function optimize_betheMPS!(MPS, network, physical, auxiliary; params...)
     @assert size(network, 2) == length(MPS)
     scaling = ones(float(real(eltype(eltype(MPS)))), size(network, 2))
     contractions = similar(network, size(network, 1) + 1, size(network, 2))
@@ -61,7 +61,8 @@ function optimize_betheMPS!(MPS, network, physical, auxiliary, maxblockdim)
     for ns in zip(Nbegin, Nmiddle, Nend)
         updatelocally!(
             MPS, contractions, scaling, network, 
-            physical, Outgoing(auxiliary), maxblockdim, ns...
+            physical, Outgoing(auxiliary), ns...; 
+            params...
         ) do MPS, contractions, auxiliary, nprev, n, nnext
             MPS[n], MPS[nnext] = exchangegauge(MPS[n], MPS[nnext], auxiliary)
             nothing
@@ -77,7 +78,8 @@ function optimize_betheMPS!(MPS, network, physical, auxiliary, maxblockdim)
         for (nprev, n, nnext) in zip(reverse(Nend), reverse(Nmiddle), reverse(Nbegin)) 
             norm = updatelocally!(
                 optimize!, MPS, contractions, scaling, network, 
-                physical, Incoming(auxiliary), maxblockdim, nprev, n, nnext
+                physical, Incoming(auxiliary), nprev, n, nnext;
+                params...
             )
             norm *= scaling[nprev] * scaling[nnext]
             @show norm; push!(norms, norm)
@@ -90,7 +92,8 @@ function optimize_betheMPS!(MPS, network, physical, auxiliary, maxblockdim)
         for (nprev, n, nnext) in zip(Nbegin, Nmiddle, Nend)
             norm = updatelocally!(
                 optimize!, MPS, contractions, scaling, network, 
-                physical, Outgoing(auxiliary), maxblockdim, nprev, n, nnext
+                physical, Outgoing(auxiliary), nprev, n, nnext;
+                params...
             )
             norm *= scaling[nprev] * scaling[nnext]
             @show norm; push!(norms, norm)
@@ -121,7 +124,7 @@ end
 
 function updatelocally!(
     update!, MPS, contractions, scaling, network, 
-    physical, auxiliary, maxblockdim, nprev, n, nnext
+    physical, auxiliary, nprev, n, nnext; params...
 )
     Knet = axes(network, 1)
     contractions[Knet, n] .= view(contractions, Knet, nprev) .* view(network, :, n)
@@ -145,7 +148,7 @@ function updatelocally!(
         view(contractions, :, n), reverse(K), Incoming(physical), normalize = false
     )
     norm = canonicalize!(
-        view(contractions, :, n), K, Outgoing(physical), maxblockdim, normalize = true
+        view(contractions, :, n), K, Outgoing(physical), normalize = true; params...
     )
     scaling[n] = scaling[nprev] * norm
     return result
