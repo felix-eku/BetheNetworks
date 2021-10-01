@@ -22,7 +22,7 @@ using BlockTensors.MatrixProductStates
 
 using TypedTables
 
-function main(N, maxrelerror, maxrelerror_transverse)
+function main(N, truncation, truncation_transverse, optimize = false)
     p = Space("p")
     a = Space("a")
     spectrals = solve_groundstate_BAE(N)
@@ -32,15 +32,15 @@ function main(N, maxrelerror, maxrelerror_transverse)
     spectrals_optimalorder[1:2:M] = spectrals[m:-1:1]
     spectrals_optimalorder[2:2:M] = spectrals[m+1:M]
     network = bethe_network(N, spectrals_optimalorder, p, a)
-    MPS = bethe_MPS(network, a; maxrelerror)
+    MPS = bethe_MPS(network, a; truncation...)
 
     energy = bethe_energy(N, spectrals_optimalorder)
     hamiltonMPO = heisenberg_hamiltonian_MPO(N, p, Space("state"))
     original_deviation = abs(real(expectationvalue(hamiltonMPO, MPS) - energy) / energy)
     
-    norms, contractions = optimize_betheMPS!(
-        MPS, network, p, a; maxrelerror = maxrelerror_transverse
-    ) 
+    optimize || return original_deviation, MPS
+
+    norms, contractions = optimize_betheMPS!(MPS, network, p, a; truncation_transverse...) 
     deviation = abs(real(expectationvalue(hamiltonMPO, MPS) - energy) / energy)
     
     return original_deviation, deviation, MPS, contractions, norms
