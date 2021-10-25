@@ -6,19 +6,19 @@ using ..Pauli
 
 export lax_operator, lax_operators
 
-function lax_operator(spectral_parameter, physical, auxiliary)
-    scaling = spectral_parameter * pauli(0, physical) * pauli(0, auxiliary)
+function lax_operator(u, physical, auxiliary, types...)
+    scaling = u * pauli(0, physical, types...) * pauli(0, auxiliary, types...)
     return scaling + (im/2) * sum(1:3) do index
-        pauli(index, physical) * pauli(index, auxiliary)
+        pauli(index, physical, types...) * pauli(index, auxiliary, types...)
     end
 end
 
-function lax_operators(spectral_parameters, physical, auxiliary)
+function lax_operators(spectral_parameters, physical, auxiliary, types...)
     operators = [
         (
             p = copy(physical); a = copy(auxiliary); 
             addtags!(a; u = round(u, digits = 3)); 
-            lax_operator(u, p, a)
+            lax_operator(u, p, a, types...)
         )
         for u in spectral_parameters
     ]

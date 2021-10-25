@@ -8,27 +8,19 @@ using BlockTensors.MatrixProductStates
 using ..Pauli
 using ..LaxOperators
 
-function bethe_network(N, spectral_parameters, physical, auxiliary)
-    operators = convert(
-        Vector{Tensor{ComplexF64, Spin}},
-        lax_operators(spectral_parameters, physical, auxiliary)
-    )
-    network = chaintensors(n -> (; n), operators, auxiliary, N)
+function bethe_network(N, spectral_parameters, physical, auxiliary, types...)
+    operators = lax_operators(spectral_parameters, physical, auxiliary, types...)
+    T, S = eltype(operators).parameters
+    network = chaintensors(n -> (; n), convert(Vector{Tensor{T, S}}, operators), auxiliary, N)
     for k in axes(network, 1)
-        network[k, 1] = network[k, 1] * Tensor(
-            Dict(tuple(Spin(Sᶻ = -1)) => ones(ComplexF64, 1)),
-            dual(only(matching(Incoming(auxiliary), network[k, 1])), connect = true)
-        )
-        network[k, N] = network[k, N] * Tensor(
-            Dict(tuple(Spin(Sᶻ = 1)) => ones(ComplexF64, 1)),
-            dual(only(matching(Outgoing(auxiliary), network[k, N])), connect = true)
-        )
+        a_in = only(matching(Incoming(auxiliary), network[k, 1]))
+        network[k, 1] = network[k, 1] * spindown(dual(a_in, connect = true), types...)
+        a_out = only(matching(Outgoing(auxiliary), network[k, N]))
+        network[k, N] = network[k, N] * spinup(dual(a_out, connect = true), types...)
     end
     for n in axes(network, 2)
-        network[1, n] = network[1, n] * Tensor(
-            Dict(tuple(Spin(Sᶻ = 1)) => ones(ComplexF64, 1)),
-            dual(only(matching(Incoming(physical), network[1, n])), connect = true)
-        )
+        p = only(matching(Incoming(physical), network[1, n]))
+        network[1, n] = network[1, n] * spinup(dual(p, connect = true), types...)
     end
     return network
 end
