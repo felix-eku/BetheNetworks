@@ -22,13 +22,13 @@ using BlockTensors.MatrixProductStates
 
 using TypedTables
 
-function main(
-    N, truncation, truncation_transverse, ::Type{S} = Spin;
+function study_BetheMPS(
+    N, Bₙ, truncation, truncation_transverse, ::Type{S} = Spin;
     optimize = false
 ) where S <: SymmetrySector
     p = Space("p")
     a = Space("a")
-    spectrals = solve_groundstate_BAE(N)
+    spectrals = solveBAE(N, Bₙ)
     spectrals_optimalorder = similar(spectrals)
     M = length(spectrals)
     m = div(M, 2, RoundUp)
