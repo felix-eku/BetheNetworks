@@ -14,7 +14,7 @@ using .BetheEnergy
 using .BetheNetwork
 
 export Spin, pauli, lax_operator, lax_operators
-export solveBAE, solve_groundstate_BAE
+export solveBAE, groundstate_Bₙ
 export bethe_energy, heisenberg_hamiltonian_MPO, bethe_network, bethe_MPS
 
 using BlockTensors

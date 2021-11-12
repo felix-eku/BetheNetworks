@@ -1,6 +1,6 @@
 module SpectralParameters
 
-export solveBAE, solve_groundstate_BAE
+export solveBAE, groundstate_Bₙ
 
 """Calculate (real) solutions of the Bethe Ansatz equations (BAE).
 
@@ -33,11 +33,11 @@ scattering(uₙ, u) = sum(atan(uₙ - uⱼ) for uⱼ in u)
 
 
 """
-Solve the BAE for the antiferromagnetic ground state with `N` spins.
+Configuration of Bₙ for the antiferromagnetic ground state with `N` spins.
 """
-function solve_groundstate_BAE(N::Integer; tolerance...)
+function groundstate_Bₙ(N::Integer)
     iseven(N) || throw(ArgumentError("N is not even"))
-    solveBAE(N, (-N/2 + 1) : 2 : (N/2 - 1); tolerance...)
+    return (-N/2 + 1) : 2 : (N/2 - 1)
 end
 
 end
