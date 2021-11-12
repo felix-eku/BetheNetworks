@@ -51,10 +51,7 @@ end
 
 function entanglement_data(MPS, connecting)
     bonds = 1 : length(MPS) - 1
-    dimensions = [
-        only(matching(connecting, MPS[eachindex(MPS)[bond]])).dimensions.totaldim
-        for bond in bonds
-    ]
+    dimensions = [bond_dimension(MPS, bond, connecting) for bond in bonds]
     entropies = [entanglement_entropy(MPS, bond, connecting) for bond in bonds]
     return Table(bond = bonds, dimension = dimensions, entropy = entropies)
 end
