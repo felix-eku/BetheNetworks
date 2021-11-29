@@ -72,22 +72,24 @@ function heisenberg_hamiltonian_MPO(
                 statechange_tensor(5, 1 + index, 5, auxiliary, types...)
             )
         end
-    mpo = chaintensors(n -> (; n), t, auxiliary, N)
-    legs = mpo[begin].legs
-    p_out = only(matching(Outgoing(physical), legs))
-    p_in = only(matching(Incoming(physical), legs))
-    a_out = only(matching(Outgoing(auxiliary), legs))
-    a_in = only(matching(Incoming(auxiliary), legs))
-    mpo[begin] = (
-        pauli(0, p_out, p_in, types...) * statechange_tensor(5, 5, 1, a_out, a_in, types...) +
+    MPO = createchain(t, N) do n, connector
+        matching(physical, connector) ? (; n) : ()
+    end
+    physout, physin, auxout, auxin = matchlegs(
+        MPO[begin], Outgoing(physical), Incoming(physical), Outgoing(auxiliary), Incoming(auxiliary)
+    )
+    MPO[begin] = (
+        pauli(0, physout, physin, types...) * statechange_tensor(5, 5, 1, auxout, auxin, types...) +
         sum(1:3) do index
-            (1/2)pauli(index, p_out, p_in, types...) * (
-                statechange_tensor(5, 5, 1 + index, a_out, a_in, types...) +
-                statechange_tensor(5, 1 + index, 1, a_out, a_in, types...)
+            (1/2)pauli(index, physout, physin, types...) * (
+                statechange_tensor(5, 5, 1 + index, auxout, auxin, types...) +
+                statechange_tensor(5, 1 + index, 1, auxout, auxin, types...)
             )
         end
     )
-    return mpo
+    lout, lin = connectchain!(MPO, auxiliary)
+    connect!(MPO[end], MPO[begin], auxiliary, lout, lin)
+    return MPO
 end
 
 end
