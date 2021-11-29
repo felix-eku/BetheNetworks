@@ -100,7 +100,7 @@ function pauli(
     incoming::Union{Leg{S, Incoming}, Incoming},
     ::Type{T} = ComplexF64, ::Type{S} = Spin
 ) where {T <: Number, S <: SymmetrySector}
-    Tensor{T}(paulicomponents(T, S, index), (outgoing, incoming))
+    Tensor{T}(paulicomponents(T, S, index), (outgoing, incoming), fill(paulidims(S), 2))
 end
 function pauli(
     index::Union{Integer, AbstractChar}, 
@@ -111,16 +111,11 @@ function pauli(
     pauli(index, outgoing, incoming, ComplexF64, S)
 end
 function pauli(
-    index::Union{Integer, AbstractChar}, 
+    index::Union{Integer, AbstractChar},
     space::Union{Connector, Space},
     ::Type{T} = ComplexF64, ::Type{S} = Spin
 ) where {T <: Number, S <: SymmetrySector}
-    dims = paulidims(S)
-    Tensor{T}(
-        paulicomponents(T, S, index), 
-        (Leg(Outgoing(space), dims), Leg(Incoming(space), dims)),
-        check = false
-    )
+    pauli(index, Outgoing(space), Incoming(space), T, S)
 end
 function pauli(
     index::Union{Integer, AbstractChar}, space::Union{Connector, Space}, ::Type{S}
