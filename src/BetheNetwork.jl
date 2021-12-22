@@ -8,19 +8,34 @@ using BlockTensors.MatrixProductStates
 using ..Pauli
 using ..LaxOperators
 
-function bethe_network(N, spectral_parameters, physical, auxiliary, types...)
-    operators = lax_operators(spectral_parameters, physical, auxiliary, types...)
-    T, S = eltype(operators).parameters
-    network = chaintensors(n -> (; n), convert(Vector{Tensor{T, S}}, operators), auxiliary, N)
-    for k in axes(network, 1)
-        a_in = only(matching(Incoming(auxiliary), network[k, 1]))
-        network[k, 1] = network[k, 1] * spindown(dual(a_in, connect = true), types...)
-        a_out = only(matching(Outgoing(auxiliary), network[k, N]))
-        network[k, N] = network[k, N] * spinup(dual(a_out, connect = true), types...)
+
+function B_MPO(N::Integer, lax::Tensor, auxiliary, types...)
+    MPO = createchain(lax, N) do n, connector
+        matching(auxiliary, connector) ? () : (; n)
     end
+    connectchain!(MPO, auxiliary)
+    T, S = eltype(MPO).parameters
+    MPO = convert(Vector{Tensor{T,S}}, MPO)
+    a_in = only(matching(Incoming(auxiliary), MPO[begin]))
+    MPO[begin] = MPO[begin] * spindown(dual(a_in, connect = true), types...)
+    a_out = only(matching(Outgoing(auxiliary), MPO[end]))
+    MPO[end] = MPO[end] * spinup(dual(a_out, connect = true), types...)
+    return MPO
+end
+function B_MPO(N::Integer, u::Number, physical, auxiliary, types...)
+    B_MPO(N, lax_operator(u, physical, auxiliary, types...), auxiliary, types...)
+end
+function bethe_network(N::Integer, spectral_parameters, physical, auxiliary, types...)
+    operators = lax_operators(spectral_parameters, physical, auxiliary, types...)
+    bethe_network(B_MPO.(N, operators, auxiliary, types), physical)
+end
+function bethe_network(MPOs, physical)
+    network = cat(reshape.(MPOs, 1, :)..., dims = 1)
+    T, S = eltype(network).body.parameters
+    connectchain!(network, physical, dim = 1)
     for n in axes(network, 2)
-        p = only(matching(Incoming(physical), network[1, n]))
-        network[1, n] = network[1, n] * spinup(dual(p, connect = true), types...)
+        p = only(matching(Incoming(physical), network[begin, n]))
+        network[begin, n] = network[begin, n] * spinup(dual(p, connect = true), T, S)
     end
     return network
 end
