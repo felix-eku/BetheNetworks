@@ -1,8 +1,10 @@
 module BetheNetwork
 
+export B_MPO, symMPO
 export bethe_network, betheMPS, optimize_betheMPS!
 
 using BlockTensors
+using BlockTensors: prune!
 using BlockTensors.TensorChain
 using BlockTensors.MatrixProductStates
 using ..Pauli
@@ -25,6 +27,47 @@ end
 function B_MPO(N::Integer, u::Number, physical, auxiliary, types...)
     B_MPO(N, lax_operator(u, physical, auxiliary, types...), auxiliary, types...)
 end
+
+function symMPO(N::Integer, u::Number, physical, auxiliary, types...)
+    p = Space(physical)
+    a = Space(auxiliary, u = round(abs(u), digits = 3))
+    a1 = Space(a, i = 1)
+    a2 = Space(a, i = 2)
+    L⁻1 = lax_operator(-u, Outgoing(p), Incoming(p), Outgoing(a1), Incoming(a1), types...)
+    L⁻2 = lax_operator(-u, Outgoing(p), Incoming(p), Outgoing(a2), Incoming(a2), types...)
+    L⁺1 = lax_operator(+u, Outgoing(p), Incoming(p), Outgoing(a1), Incoming(a1), types...)
+    L⁺2 = lax_operator(+u, Outgoing(p), Incoming(p), Outgoing(a2), Incoming(a2), types...)
+    connect!(L⁻1, L⁺2, physical)
+    connect!(L⁺1, L⁻2, physical)
+    T, S = typeof(L⁺1).parameters
+    A1 = Tensor(Dict((zero(S), zero(S)) => T[1 -im; +im 1] / 2), Outgoing(a), Incoming(a))
+    A2 = Tensor(Dict((zero(S), zero(S)) => T[1 +im; -im 1] / 2), Outgoing(a), Incoming(a))
+    as = a1, a2, a
+    O1 = mergelegs(L⁻1 * L⁺2 * A1, Outgoing.(as), Incoming.(as))
+    O2 = mergelegs(L⁺1 * L⁻2 * A2, Outgoing.(as), Incoming.(as))
+    O = convert(Tensor{real(T), S}, O1 + O2)
+    prune!(O)
+    v = Tensor(Dict(tuple(zero(S)) => real(T)[1, 0]), Outgoing(a))
+    auxket = mergelegs(
+        spindown(Outgoing(a1), real(T), S) * spindown(Outgoing(a2), real(T), S) * v,
+        Outgoing.(as)
+    )
+    auxbra = mergelegs(
+        spinup(Outgoing(a1), real(T), S)' * spinup(Outgoing(a2), real(T), S)' * v',
+        Incoming.(as)
+    )
+    MPO = createchain(O, N) do n, connector
+        matching(physical, connector) ? (; n) : ()
+    end
+    connectchain!(MPO, auxiliary)
+    MPO = convert(Vector{Tensor{real(T), S}}, MPO)
+    connect!(auxket, MPO[begin], auxiliary)
+    MPO[begin] *= auxket
+    connect!(MPO[end], auxbra, auxiliary)
+    MPO[end] *= auxbra
+    return MPO
+end
+
 function bethe_network(N::Integer, spectral_parameters, physical, auxiliary, types...)
     operators = lax_operators(spectral_parameters, physical, auxiliary, types...)
     bethe_network(B_MPO.(N, operators, auxiliary, types), physical)
