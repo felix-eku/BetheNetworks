@@ -1,6 +1,6 @@
 module BetheNetwork
 
-export bethe_network, bethe_MPS, optimize_betheMPS!
+export bethe_network, betheMPS, optimize_betheMPS!
 
 using BlockTensors
 using BlockTensors.TensorChain
@@ -40,16 +40,26 @@ function bethe_network(MPOs, physical)
     return network
 end
 
-function bethe_MPS(network, auxiliary; truncation...)
+function betheMPS(network, auxiliary, bond = nothing; truncation...)
     MPS = network[begin, :]
+    canonicalize!(MPS, eachindex(MPS), Outgoing(auxiliary))
+    if bond ≢ nothing
+        entanglements = [entanglement_entropy(MPS, bond, Outgoing(auxiliary))]
+        sizehint!(entanglements, size(network, 1))
+    else
+        entanglements = nothing
+    end
     for k in axes(network, 1)[begin + 1 : end]
-        MPS = MPO_MPS_contraction(view(network, k, :), MPS, auxiliary)
+        MPS = contractchains(MPS, view(network, k, :), auxiliary)
         canonicalize!(MPS, eachindex(MPS), Outgoing(auxiliary))
         if !isempty(truncation)
             canonicalize!(MPS, reverse(eachindex(MPS)), Incoming(auxiliary); truncation...)
         end
+        if bond ≢ nothing
+            push!(entanglements, entanglement_entropy(MPS, bond, Outgoing(auxiliary)))
+        end
     end
-    return MPS
+    return MPS, entanglements
 end
 
 function optimize_betheMPS!(MPS, network, physical, auxiliary; truncation...)
