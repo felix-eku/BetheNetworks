@@ -69,4 +69,10 @@ function entanglement_data(MPS, connecting)
     return Table(bond = bonds, dimension = dimensions, entropy = entropies)
 end
 
+function truncation_comparison(N, Bₙ, maxrelerror)
+    deviation_relerror, MPS = study_betheMPS(N, Bₙ, (; maxrelerror), ())
+    bond_dimension = bond_dimension(MPS, div(N, 2), Outgoing(:a))
+    deviation_maxdim, = study_betheMPS(N, Bₙ, (; maxdim = bond_dimension), ())
+    return bond_dimension, deviation_relerror, deviation_maxdim
+end
 end
