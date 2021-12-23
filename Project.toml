@@ -5,4 +5,5 @@ version = "0.1.0"
 
 [deps]
 BlockTensors = "501571fb-40ef-4c91-8962-06e2936314b9"
+CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
 TypedTables = "9d95f2ec-7b3d-5a63-8d20-e2491e220bb9"
