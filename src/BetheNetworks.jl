@@ -178,4 +178,57 @@ function main_sym()
     )
     table |> CSV.write("data/deviations_sym.table", delim = ' ')
 end
+
+function main_optimization()
+    Ns = 20:2:30
+    deviations = Array{Float64}(undef, length(Ns), 2)
+    bond_dims = similar(deviations, Int)
+    for (i, N) in enumerate(Ns)
+        Bₙs = [groundstate_Bₙ(N), -N/2 + 2 : 2 : +N/2 - 2]
+        for (configuration, Bₙ) in enumerate(Bₙs)
+            orginal_deviation, deviation, MPS = study_betheMPS(
+                N, Bₙ, (; maxdim = 20N), (; maxdim = 40N), optimize = true
+            )
+            bond_dim = maximum(bond_dimension(MPS, bond, Outgoing(:a)) for bond = 1:N-1)
+            @show (N, deviation, bond_dim)
+            deviations[i, configuration] = deviation
+            bond_dims[i, configuration] = bond_dim
+        end
+    end
+    table = Table(
+        N = Ns,
+        deviation_ground_state_maxdim_20N_40N = deviations[:, 1],
+        deviation_excited_state_maxdim_20N_40N = deviations[:, 2],
+        bond_dim_ground_state_maxdim_20N_40N = bond_dims[:, 1],
+        bond_dim_excited_state_maxdim_20N_40N = bond_dims[:, 2],
+    )
+    table |> CSV.write("data/deviations_optimization.table", delim = ' ')
+end
+
+function main_optimization_small_bond_dimensions()
+    Ns = 20:2:30
+    deviations = Array{Float64}(undef, length(Ns), 2)
+    bond_dims = similar(deviations, Int)
+    for (i, N) in enumerate(Ns)
+        Bₙs = [groundstate_Bₙ(N), -N/2 + 2 : 2 : +N/2 - 2]
+        for (configuration, Bₙ) in enumerate(Bₙs)
+            orginal_deviation, deviation, MPS = study_betheMPS(
+                N, Bₙ, (; maxdim = 10N), (; maxdim = 20N), optimize = true
+            )
+            bond_dim = maximum(bond_dimension(MPS, bond, Outgoing(:a)) for bond = 1:N-1)
+            @show (N, deviation, bond_dim)
+            deviations[i, configuration] = deviation
+            bond_dims[i, configuration] = bond_dim
+        end
+    end
+    table = Table(
+        N = Ns,
+        deviation_ground_state_maxdim_10N_20N = deviations[:, 1],
+        deviation_excited_state_maxdim_10N_20N = deviations[:, 2],
+        bond_dim_ground_state_maxdim_10N_20N = bond_dims[:, 1],
+        bond_dim_excited_state_maxdim_10N_20N = bond_dims[:, 2],
+    )
+    table |> CSV.write("data/deviations_optimization_small_bond_dimensions.table", delim = ' ')
+end
+
 end
