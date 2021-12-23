@@ -142,4 +142,12 @@ function main_original()
     table |> CSV.write("data/deviations_original.table", delim = ' ')
 end
 
+function main_entanglement_original_groundstate()
+    N = 40
+    Bₙ = groundstate_Bₙ(N)
+    dev, MPS, entanglement = study_betheMPS(N, Bₙ, (; maxdim = 20N), (), bond = N÷2)
+    table = Table(entanglement_groundstate = entanglement)
+    table |> CSV.write("data/entanglement_original_groundstate_$N.table", delim = ' ')
+end
+
 end
