@@ -150,4 +150,32 @@ function main_entanglement_original_groundstate()
     table |> CSV.write("data/entanglement_original_groundstate_$N.table", delim = ' ')
 end
 
+function main_sym()
+    Ns = 20:2:40
+    deviations = Array{Float64}(undef, length(Ns), 4)
+    bond_dims = similar(deviations, Int)
+    for (i, N) in enumerate(Ns)
+        Bₙs = [groundstate_Bₙ(N), -N/2 + 2 : 2 : +N/2 - 2]
+        truncations = [(; maxdim = 20N), (; maxrelerror = 1e-9)]
+        for (configuration, (truncation, Bₙ)) in enumerate(Iterators.product(truncations, Bₙs))
+            deviation, MPS = study_betheMPS(N, Bₙ, truncation, (), real_symmetric = true)
+            bond_dim = maximum(bond_dimension(MPS, bond, Outgoing(:a)) for bond = 1:N-1)
+            @show (N, deviation, bond_dim)
+            deviations[i, configuration] = deviation
+            bond_dims[i, configuration] = bond_dim
+        end
+    end
+    table = Table(
+        N = Ns,
+        deviation_ground_state_maxdim_20N = deviations[:, 1],
+        deviation_ground_state_truncation_error_e9 = deviations[:, 2],
+        deviation_excited_state_maxdim_20N = deviations[:, 3],
+        deviation_excited_state_truncation_error_e9 = deviations[:, 4],
+        bond_dim_ground_state_maxdim_20N = bond_dims[:, 1],
+        bond_dim_ground_state_truncation_error_e9 = bond_dims[:, 2],
+        bond_dim_excited_state_maxdim_20N = bond_dims[:, 3],
+        bond_dim_excited_state_truncation_error_e9 = bond_dims[:, 4],
+    )
+    table |> CSV.write("data/deviations_sym.table", delim = ' ')
+end
 end
