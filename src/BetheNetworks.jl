@@ -16,7 +16,7 @@ using .BetheNetwork
 export Spin, pauli, lax_operator, lax_operators
 export solveBAE, groundstate_Bₙ
 export bethe_energy, heisenberg_hamiltonian_MPO, bethe_network, betheMPS
-export study_betheMPS
+export study_betheMPS, study_betheMPS_projection
 
 using BlockTensors
 using BlockTensors.MatrixProductStates
@@ -60,6 +60,26 @@ function study_betheMPS(
     deviation = abs(real(expectationvalue(hamiltonMPO, MPS, p) - energy) / energy)
     
     return original_deviation, deviation, MPS, entanglements, contractions, norms
+end
+
+function study_betheMPS_projection(
+    N, Bₙ, ::Type{S} = Spin; truncation...
+) where S <: SymmetrySector
+    p = Space("p")
+    a = Space("a")
+    spectrals = solveBAE(N, Bₙ)
+    m = div(length(spectrals), 2, RoundUp)
+    spectrals_optimalorder = similar(spectrals)
+    spectrals_optimalorder[1:2:end] = spectrals[m : -1 : begin]
+    spectrals_optimalorder[2:2:end] = spectrals[m + 1 : end]
+    network = bethe_network(N, spectrals_optimalorder, p, a, S)
+    MPS = betheMPS_projection(network, p, a; truncation...)
+    canonicalize!(MPS, eachindex(MPS), Incoming(a))
+
+    energy = bethe_energy(N, spectrals)
+    hamiltonMPO = heisenberg_hamiltonian_MPO(N, p, Space("state"), S)
+    deviation = abs(real(expectationvalue(hamiltonMPO, MPS, p) - energy) / energy)
+    return deviation, MPS
 end
 
 function entanglement_data(MPS, connecting)

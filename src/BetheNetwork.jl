@@ -105,6 +105,88 @@ function betheMPS(network, auxiliary, bond = nothing; truncation...)
     return MPS, entanglements
 end
 
+function betheMPS_projection(network, physical, auxiliary; truncation...)
+    MPS = similar(network, size(network, 2))
+    for k in axes(network, 1)
+        canonicalize!(view(network, k, :), reverse(axes(network, 2)), Incoming(auxiliary))
+    end
+    contraction = network[:, begin]
+    projection_ket = deepcopy(contraction)
+    for tensor in projection_ket, leg in matching(Space(physical), tensor.legs)
+        addtags!(leg, projection = true)
+    end
+    projection_bra = adjoint.(projection_ket)
+    MPS[begin], projection_bra, projection_ket = canonicalize_project(
+        contraction, projection_bra, projection_ket, physical, truncation
+    )
+    for n in axes(network, 2)[begin + 1 : end - 1]
+        T = mergelegs(
+            projection_ket[end] * network[end, n], 
+            union(
+                matching(Incoming(physical), projection_ket[end]), 
+                matching(Incoming(physical), network[end, n])
+            )
+        )
+        projection_ket = contractchains(projection_ket, view(network, :, n), physical)
+        projection_bra = contractchains(projection_bra, adjoint.(view(network, :, n)), physical)
+        contraction .= copy.(projection_ket)
+        contraction[end] = T
+        MPS[n], projection_bra, projection_ket = canonicalize_project(
+            contraction, projection_bra, projection_ket, physical, truncation
+        )
+    end
+    T = 1
+    for (Tket, L) in zip(projection_ket, view(network, :, lastindex(network, 2)))
+        T = (T * L) * Tket
+    end
+    MPS[end] = T
+    for n in eachindex(MPS)
+        new_legs = map(MPS[n].legs) do leg
+            if (:projection => true) in leg.connector.space.tags
+                Leg(typeof(leg.connector)(auxiliary), leg.dimensions)
+            else
+                leg
+            end
+        end
+        MPS[n] = Tensor(MPS[n].components, new_legs)
+    end
+    connectchain!(reverse(MPS), auxiliary)
+    return MPS
+end
+
+function canonicalize_project(contraction, projection_bra, projection_ket, physical, truncation)
+    canonicalize!(
+        projection_ket, eachindex(projection_ket), Outgoing(physical); 
+        normalize = false
+    )
+    exchangegauge(projection_ket[end], projection_bra[end], Outgoing(physical))
+    canonicalize!(
+        projection_bra, reverse(eachindex(projection_bra)), Outgoing(physical);
+        normalize = false
+    )
+    canonicalize!(
+        projection_bra, eachindex(projection_bra), Incoming(physical);
+        normalize = false, truncation...
+    )
+    exchangegauge(
+        projection_bra[end], projection_ket[end], Incoming(physical); truncation...
+    )
+    canonicalize!(
+        projection_ket, reverse(eachindex(projection_ket)), Incoming(physical); 
+        normalize = false, truncation...
+    )
+    canonicalize!(
+        projection_ket, eachindex(projection_ket), Outgoing(physical); 
+        normalize = false
+    )
+    T = 1
+    for (Tket, Tbra) in zip(contraction, projection_bra)
+        T = (T * Tbra) * Tket
+    end
+    exchangegauge(projection_ket[end], projection_bra[end], Outgoing(physical))
+    return T, projection_bra, projection_ket
+end
+
 function optimize_betheMPS!(MPS, network, physical, auxiliary; truncation...)
     @assert size(network, 2) == length(MPS)
     scaling = ones(float(real(eltype(eltype(MPS)))), size(network, 2))
